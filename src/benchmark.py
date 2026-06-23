@@ -51,7 +51,7 @@ def main() -> int:
     args = parse_args()
     model, tokenizer, device = load_model_and_tokenizer(CFG.base_model, args.adapter)
 
-    ds = load_dataset("openai_humaneval", split="test")
+    ds = load_dataset("openai/openai_humaneval", split="test")
     if args.limit:
         ds = ds.select(range(min(args.limit, len(ds))))
 
