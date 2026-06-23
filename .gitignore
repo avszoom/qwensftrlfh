@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+outputs/
+results/
+*.pt
+*.safetensors
+.DS_Store
+wandb/
+.cache/
