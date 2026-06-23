@@ -17,12 +17,17 @@ A running log of what we did, in order, so it's easy to pick up later.
   signature; no instruction needed). SFT/RL stages use `--chat` mode.
 - Baseline score (pass@1): _TODO: fill in after run_
 
-## Stage 2 — SFT (LoRA) 🟡 in progress
+## Stage 2 — SFT (LoRA) 🟡 paused (pipeline validated)
 - Goal: teach the base model to **follow instructions** using CodeAlpaca.
-- Train: `python -m src.sft_train`
-- Verify follows instructions: `python -m src.chat_demo --adapter outputs/sft`
-- Benchmark (chat mode): `python -m src.benchmark --adapter outputs/sft --chat --tag sft`
-- SFT score (pass@1): _TODO_
+- ✅ Pipeline validated: smoke run (16 samples) trained + saved a LoRA adapter OK.
+- ✅ Fixed trl 1.x API: `SFTConfig(max_seq_length=...)` → `max_length=...`.
+- 🟡 Full run (5000 samples, 313 steps, ~8-9 s/step ≈ 45 min on MPS) was **started then
+  stopped by user before completion** — no adapter saved yet. First loss ~2.29, token
+  acc ~0.66 (healthy).
+- Resume/run full training: `python -m src.sft_train`
+- Then verify follows instructions: `python -m src.chat_demo --adapter outputs/sft`
+- Then benchmark (chat mode): `python -m src.benchmark --adapter outputs/sft --chat --tag sft`
+- SFT score (pass@1): _TODO (after full run completes)_
 
 ## Stage 3 — RLVR / RLHF ⬜ not started
 - GRPO (RLVR): `python -m src.rl_train --method grpo`
