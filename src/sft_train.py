@@ -73,7 +73,7 @@ def main() -> int:
         per_device_train_batch_size=CFG.sft_batch_size,
         gradient_accumulation_steps=CFG.sft_grad_accum,
         learning_rate=args.lr,
-        max_seq_length=CFG.max_seq_len,
+        max_length=CFG.max_seq_len,
         dataset_text_field="text",
         logging_steps=10,
         save_strategy="no",
