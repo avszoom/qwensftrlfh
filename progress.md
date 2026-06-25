@@ -36,12 +36,24 @@ A running log of what we did, in order, so it's easy to pick up later.
 
 ---
 
-## Scoreboard
+## Scoreboard (20-problem subset — noisy; full 164 run still TODO)
 | Stage | Model | pass@1 | Notes |
 |-------|-------|--------|-------|
-| 1 | base | _TODO_ | completion mode |
-| 2 | + SFT | _TODO_ | chat mode |
+| 1 | base | 0.40 (8/20) | completion mode (HumanEval's native format) |
+| 2 | + SFT | 0.20 (4/20) | chat mode — **dropped** (see finding) |
 | 3 | + RL  | _TODO_ | chat mode |
+
+### Finding: SFT improved behavior but LOWERED the benchmark
+- SFT (CodeAlpaca) taught instruction-following (chat_demo confirms correct answers),
+  but pass@1 fell 0.40 → 0.20. Reasons:
+  1. Base is a code-completion specialist; completion mode was its strength.
+  2. CodeAlpaca is generic/older — taught *format*, not better *code* (traded skill for behavior).
+  3. Chat mode + over-generation (trailing comments) makes exact tests fail.
+  4. 20 problems is noisy.
+- Lesson: SFT = behavior, not capability. **RLVR (Stage 3) is what should raise pass@1**
+  because it rewards code that passes tests.
+- Remedies to try: better SFT data (Magicoder-OSS-Instruct), tighter stop/extraction,
+  run full 164, then GRPO/RLVR.
 
 ## Known environment notes
 - Python 3.14 venv on macOS (Apple MPS).
