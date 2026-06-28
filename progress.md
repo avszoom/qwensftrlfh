@@ -9,29 +9,29 @@ A running log of what we did, in order, so it's easy to pick up later.
   `reward.py`, `build_preference_data.py`, `rl_train.py`.
 - Added `README.md`, `commands.md`, `architecture.md`, `CONCEPTS.md` (in microgpt).
 
-## Stage 1 — Base model benchmark 🟡 in progress
+## Stage 1 — Base model benchmark 🟡 smoke done, full run TODO
 - Fixed dataset id bug: `openai_humaneval` → `openai/openai_humaneval`
   (new `datasets` lib needs `namespace/name`).
-- Command: `python -m src.benchmark --limit 20 --tag base_smoke` then full `--tag base`.
 - Confirmed how base eval works: **completion mode** (model autocompletes the function
   signature; no instruction needed). SFT/RL stages use `--chat` mode.
-- Baseline score (pass@1): _TODO: fill in after run_
+- ✅ Smoke (20 problems): **pass@1 = 0.40 (8/20)**.
+- ⬜ Full 164-problem baseline still TODO: `python -m src.benchmark --tag base`.
 
-## Stage 2 — SFT (LoRA) 🟡 paused (pipeline validated)
+## Stage 2 — SFT (LoRA) ✅ complete
 - Goal: teach the base model to **follow instructions** using CodeAlpaca.
-- ✅ Pipeline validated: smoke run (16 samples) trained + saved a LoRA adapter OK.
 - ✅ Fixed trl 1.x API: `SFTConfig(max_seq_length=...)` → `max_length=...`.
-- 🟡 Full run (5000 samples, 313 steps, ~8-9 s/step ≈ 45 min on MPS) was **started then
-  stopped by user before completion** — no adapter saved yet. First loss ~2.29, token
-  acc ~0.66 (healthy).
-- Resume/run full training: `python -m src.sft_train`
-- Then verify follows instructions: `python -m src.chat_demo --adapter outputs/sft`
-- Then benchmark (chat mode): `python -m src.benchmark --adapter outputs/sft --chat --tag sft`
-- SFT score (pass@1): _TODO (after full run completes)_
+- ✅ Full run: 5000 samples, 313 steps, ~42 min on MPS. Loss **2.29 → 1.12**,
+  token acc ~0.75. Adapter saved to `outputs/sft/` (~35 MB).
+- ✅ `chat_demo` confirms it now **follows instructions** with correct code
+  (Fibonacci, palindrome, second-largest all correct) — the base just autocompleted.
+- ⚠️ Benchmark (20-problem subset, chat): **pass@1 = 0.20 (4/20)** — DROPPED vs base.
+  See "Finding" below. (SFT's win is *behavior*, not benchmark.)
 
-## Stage 3 — RLVR / RLHF ⬜ not started
-- GRPO (RLVR): `python -m src.rl_train --method grpo`
-- DPO (RLHF): `python -m src.build_preference_data` then `--method dpo`
+## Stage 3 — RLVR / RLHF ⬜ not started (next)
+- GRPO (RLVR): `python -m src.rl_train --method grpo` — the strong path (reward = tests pass),
+  but **slow on MPS**: ~75-120 s/step → full 200 steps ≈ **4-7 hr**. Smoke (20 steps) ≈ 35 min.
+- DPO (RLHF): `python -m src.build_preference_data` then `--method dpo` — much cheaper
+  (~30-45 min), legitimate Stage-3 result.
 - RL score (pass@1): _TODO_
 
 ---
@@ -55,7 +55,18 @@ A running log of what we did, in order, so it's easy to pick up later.
 - Remedies to try: better SFT data (Magicoder-OSS-Instruct), tighter stop/extraction,
   run full 164, then GRPO/RLVR.
 
+## Next up
+1. (optional) Full 164-problem benchmark for clean base + SFT numbers.
+2. Stage 3: start with a **GRPO smoke (20 steps, ~35 min)** to see reward climb,
+   or go the cheaper **DPO** route. Then benchmark `outputs/grpo`/`outputs/dpo` for score C.
+
+## Concepts captured
+- `learning.md` — training stages, SFT, RLHF/RLVR, how weights/backprop/nudging work,
+  LoRA, RAG vs fine-tuning, serving (llama.cpp / ollama / vLLM).
+- microgpt repo `CONCEPTS.md` — model internals (attention, multi-head, context window, KV cache).
+
 ## Known environment notes
 - Python 3.14 venv on macOS (Apple MPS).
 - Use `python3 -m venv`; inside the venv `python` works.
 - Datasets must be `namespace/name`.
+- Background jobs die if the Claude session/CLI exits — keep it open for long runs.
