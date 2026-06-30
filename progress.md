@@ -27,7 +27,28 @@ A running log of what we did, in order, so it's easy to pick up later.
 - ⚠️ Benchmark (20-problem subset, chat): **pass@1 = 0.20 (4/20)** — DROPPED vs base.
   See "Finding" below. (SFT's win is *behavior*, not benchmark.)
 
-## Stage 3 — RLVR / RLHF ⬜ not started (next)
+## Stage 3 — RLVR (GRPO) 🟡 experiments done; signal weak (0.5B near capability floor)
+GRPO smoke runs (20 steps each, MBPP, on SFT model). Key metric: `frac_reward_zero_std`
+(fraction of groups where all attempts score the same = NO learning signal; lower is better).
+
+| Experiment | frac_reward_zero_std | Verdict |
+|---|---|---|
+| sparse reward (1/0), 4 gens, temp 1.0 | 0.8–1.0 | dead (all-fail groups) |
+| + temperature 1.2 | 0.8–1.0 | no help |
+| + 8 generations | 0.8–1.0 | no help |
+| + **dense reward** (fraction of asserts passed) | **→ 0.6** | **best — real signal** |
+
+- GRPO smoke (default) benchmark: pass@1 = **0.05 (1/20)** — 20 noisy steps added noise, not learning.
+- **Lesson:** the bottleneck was **sparse reward + a base too weak to ever fully pass**. Dense
+  (partial-credit) reward is the correct fix and gave the best signal, but the 0.5B model still
+  passes only ~6% of test cases — it's near the floor RLVR needs.
+- Timing on MPS: ~13 s/step (4 gens) to ~29 s/step (8 gens). Full 200 steps ≈ 45–90 min (feasible).
+- Code: `reward.py:check_mbpp_fraction` (dense), `rl_train.py` now uses it; added CLI knobs
+  `--steps --temperature --num-generations --num-prompts --max-completion-len`.
+- Next options: (a) longer dense run (100+ steps) to accumulate signal; (b) curate easier MBPP
+  subset to raise reward; (c) accept as documented finding (RLVR needs a capable base).
+
+### (original Stage 3 plan)
 - GRPO (RLVR): `python -m src.rl_train --method grpo` — the strong path (reward = tests pass),
   but **slow on MPS**: ~75-120 s/step → full 200 steps ≈ **4-7 hr**. Smoke (20 steps) ≈ 35 min.
 - DPO (RLHF): `python -m src.build_preference_data` then `--method dpo` — much cheaper

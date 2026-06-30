@@ -43,10 +43,48 @@ def check_humaneval(completion_program: str, test: str, entry_point: str,
 
 
 def check_mbpp(code: str, test_list: list[str], timeout: int = 10) -> bool:
-    """MBPP-style check: code defines the function, then a list of assert tests."""
+    """MBPP-style check: code defines the function, then a list of assert tests.
+
+    Strict / all-or-nothing: True only if EVERY assert passes. Used for benchmarking.
+    """
     tests = "\n".join(test_list)
     program = f"{code}\n\n{tests}\n"
     return run_program(program, timeout)
+
+
+def check_mbpp_fraction(code: str, test_list: list[str], timeout: int = 10) -> float:
+    """Dense reward: the FRACTION of individual asserts that pass (0.0 - 1.0).
+
+    Each assert is wrapped in try/except and counted independently, so a candidate
+    that passes 3 of 4 tests scores 0.75 instead of 0. This gives RLVR a learning
+    signal even when no attempt is fully correct (avoids all-zero reward groups).
+    """
+    if not test_list:
+        return 0.0
+    n = len(test_list)
+    blocks = []
+    for t in test_list:
+        blocks.append(f"try:\n    {t.strip()}\n    _p += 1\nexcept Exception:\n    pass")
+    program = f"{code}\n_p = 0\n" + "\n".join(blocks) + f"\nprint('FRACPASS', _p, {n})\n"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "candidate.py"
+        path.write_text(program, encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(path)],
+                capture_output=True, timeout=timeout, cwd=tmp, text=True,
+            )
+        except Exception:
+            return 0.0
+        for line in proc.stdout.splitlines():
+            if line.startswith("FRACPASS"):
+                try:
+                    _, p, total = line.split()
+                    return int(p) / int(total)
+                except Exception:
+                    return 0.0
+    return 0.0
 
 
 def extract_code(text: str) -> str:

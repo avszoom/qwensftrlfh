@@ -26,7 +26,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .common import build_chat_prompt, get_device, get_dtype, logger
 from .config import CFG
-from .reward import check_mbpp, extract_code
+from .reward import check_mbpp, check_mbpp_fraction, extract_code
 
 
 def load_sft_base():
@@ -54,13 +54,20 @@ def lora_config() -> LoraConfig:
 
 
 # --------------------------------------------------------------------- GRPO (RLVR)
-def train_grpo() -> None:
+def train_grpo(steps=None, max_completion_len=None, num_prompts=None,
+               temperature=None, num_generations=None) -> None:
     from trl import GRPOConfig, GRPOTrainer
+
+    steps = steps or CFG.grpo_steps
+    max_completion_len = max_completion_len or CFG.gen_max_new_tokens
+    num_prompts = num_prompts or CFG.rl_max_prompts
+    temperature = temperature or 1.0
+    num_generations = num_generations or CFG.grpo_num_generations
 
     model, tokenizer, device, dtype = load_sft_base()
 
     raw = load_dataset(CFG.rl_dataset, split="train")
-    raw = raw.select(range(min(CFG.rl_max_prompts, len(raw))))
+    raw = raw.select(range(min(num_prompts, len(raw))))
 
     def to_prompt(p):
         hint = p["test_list"][0] if p["test_list"] else ""
@@ -72,20 +79,25 @@ def train_grpo() -> None:
     ds = raw.map(to_prompt, remove_columns=raw.column_names)
 
     def reward_funcs(completions, test_list=None, **kwargs):
-        """+1.0 if the generated code passes its unit tests, else 0.0."""
+        """Dense reward: fraction of unit tests that pass (0.0-1.0).
+
+        Partial credit gives a learning signal even when no attempt is fully
+        correct, avoiding all-zero reward groups (sparse-reward problem).
+        """
         rewards = []
         for comp, tests in zip(completions, test_list):
             code = extract_code(comp)
-            rewards.append(1.0 if check_mbpp(code, tests, CFG.code_exec_timeout) else 0.0)
+            rewards.append(check_mbpp_fraction(code, tests, CFG.code_exec_timeout))
         return rewards
 
     args = GRPOConfig(
         output_dir=str(CFG.grpo_adapter),
         learning_rate=CFG.grpo_lr,
-        per_device_train_batch_size=CFG.grpo_num_generations,
-        num_generations=CFG.grpo_num_generations,
-        max_completion_length=CFG.gen_max_new_tokens,
-        max_steps=CFG.grpo_steps,
+        per_device_train_batch_size=num_generations,
+        num_generations=num_generations,
+        temperature=temperature,
+        max_completion_length=max_completion_len,
+        max_steps=steps,
         logging_steps=5,
         save_strategy="no",
         bf16=(dtype == torch.bfloat16),
@@ -159,9 +171,15 @@ def train_dpo() -> None:
 def main() -> int:
     p = argparse.ArgumentParser(description="Stage 3: GRPO (RLVR) or DPO (RLHF)")
     p.add_argument("--method", choices=["grpo", "dpo"], required=True)
+    p.add_argument("--steps", type=int, default=None, help="GRPO: override max steps")
+    p.add_argument("--max-completion-len", type=int, default=None, help="GRPO: cap generated tokens")
+    p.add_argument("--num-prompts", type=int, default=None, help="GRPO: limit dataset prompts")
+    p.add_argument("--temperature", type=float, default=None, help="GRPO: sampling temperature")
+    p.add_argument("--num-generations", type=int, default=None, help="GRPO: attempts per prompt")
     args = p.parse_args()
     if args.method == "grpo":
-        train_grpo()
+        train_grpo(args.steps, args.max_completion_len, args.num_prompts,
+                   args.temperature, args.num_generations)
     else:
         train_dpo()
     return 0
